@@ -8,6 +8,11 @@ import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 import copy
+import sys
+import os
+CURRENT_DIR = os.path.split(os.path.abspath(__file__))[0]  # 当前目录
+config_path = CURRENT_DIR.rsplit('/', 1)[0]  # 上三级目录
+sys.path.append(config_path)
 import config
 import model
 from sklearn.preprocessing import MinMaxScaler
@@ -17,13 +22,6 @@ import faulthandler
 # faulthandler.enable()
 # 后边正常写你的代码
 
-
-# 创建表头
-def make_signal_list():
-    signal_list = list()
-    for i in range(-config.slide_range, 0):
-        signal_list.append('signal' + str(i))
-    return signal_list
 
 if __name__ == "__main__":
     # 标准化

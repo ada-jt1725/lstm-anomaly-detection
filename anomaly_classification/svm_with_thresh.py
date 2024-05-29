@@ -6,20 +6,20 @@ from torch.utils.data import Dataset, DataLoader
 import numpy as np
 import torch
 import torch.nn as nn
+import sys
+import os
+CURRENT_DIR = os.path.split(os.path.abspath(__file__))[0]  # 当前目录
+config_path = CURRENT_DIR.rsplit('/', 1)[0]  # 上三级目录
+sys.path.append(config_path)
 import config
 import  matplotlib.pyplot as plt
 from sklearn import svm
 from sklearn.metrics import accuracy_score
-from pre_with_model import create_dataset, MyDataset, predict
+from anomaly_detection.pre_with_model import MyDataset
+from anomaly_detection.pre_with_model import predict
 
 anomaly_dataset = MyDataset(path=config.anomaly_dataset_path)
-
-anomaly_dataset, _ = train_test_split(
-    anomaly_dataset,
-    test_size=0.03,
-    shuffle=False
-)
-anomaly_train_df, _, _ = create_dataset(anomaly_dataset)
+anomaly_train_df, _, _ = anomaly_dataset.create_dataset()
 
 model = torch.load('model.pth',map_location=torch.device('cpu'))
 model = model.to(config.device)

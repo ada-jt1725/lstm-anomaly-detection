@@ -8,51 +8,23 @@ import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 import copy
+import sys
+import os
+CURRENT_DIR = os.path.split(os.path.abspath(__file__))[0]  # 当前目录
+config_path = CURRENT_DIR.rsplit('/', 1)[0]  # 上三级目录
+sys.path.append(config_path)
 import config
 import model
 from sklearn.preprocessing import MinMaxScaler
 import tqdm
 import faulthandler
+from dataset import MyDataset
 # 在import之后直接添加以下启用代码即可
 # faulthandler.enable()
 # 后边正常写你的代码
 
 logging.basicConfig(filename='train.log', level=logging.DEBUG)
 
-
-def make_signal_list():
-    signal_list = list()
-    for col in config.signal_columns:
-        for i in range(-config.slide_range, 0):
-            signal_list.append(col + str(i))
-    return signal_list
-
-def create_dataset(df):
-    array = np.array(df)
-    # print(f"array.shape={array.shape}") # (82736, 400)
-    # 将数组分割为两个部分s
-    array1 = array[:, :config.slide_range]  # 选择所有行和前200列
-    array2 = array[:, config.slide_range:]  # 选择所有行和后200列
-    # print(f"array1.shape={array1.shape}, array2.shape={array2.shape}") # (82736, 200), (82736, 200)
-    # 将两个部分合并为一个新的数组
-    array_new = np.stack((array1, array2), axis=-1)
-    dataset = [torch.tensor(s).float() for s in array_new]
-    n_seq, seq_len, n_features = torch.stack(dataset).shape
-
-    return dataset, seq_len, n_features
-
-class MyDataset(Dataset):
-    def __init__(self, path):
-        self.signal_df = pd.read_csv(path)
-        self.signal_columns = make_signal_list()
-
-    def __len__(self):
-        return len(self.signal_df)
-
-    def __getitem__(self, idx):
-        row = self.signal_df.loc[idx]
-        x = row[self.signal_columns].values.astype(float)
-        return x
 
 def predict(model, dataset):
     predictions, losses = [], []
@@ -70,29 +42,21 @@ def predict(model, dataset):
 
 if __name__ == "__main__":
     threshold_list=[]
-    for i in range(8, 10):
-        threshold_list.append(i+0.1)
-        for j in range(10):
-            threshold_list.append(i+j*0.2)
+    for i in range(10, 14):
+        threshold_list.append(i+0.3)
+        # for j in range(10):
+        #     threshold_list.append(i+j*0.2)
     test_dataset = MyDataset(path=config.after_test_dataset_path)
-    test_dataset, _ = train_test_split(
-        test_dataset,
-        test_size=0.1
-    )
-    test_dataset, _, _ = create_dataset(test_dataset)
+    testset, _, _ = test_dataset.create_dataset()
 
     anomaly_dataset = MyDataset(path=config.anomaly_dataset_path)
-    anomaly_dataset, _ = train_test_split(
-        anomaly_dataset,
-        test_size=0.1
-    )
-    anomaly_train_df, _, _ = create_dataset(anomaly_dataset)
+    anomaly_set, _, _ = anomaly_dataset.create_dataset()
 
 
 
     batch_size = config.batch_size
 
-    model = torch.load('model.pth')
+    model = torch.load('model.pth',map_location=torch.device(config.device))
     model = model.to(config.device)
 
     threshold_accuracy = dict(normal=[], anormal=[])
@@ -100,17 +64,26 @@ if __name__ == "__main__":
         THRESHOLD = threshold_list[i]
         print(f"THRESHOLD:{THRESHOLD}")
 
-        predictions, pred_losses = predict(model, test_dataset)
+        predictions, pred_losses = predict(model, testset)
         # print(pred_losses)
         correct = sum(l <= THRESHOLD for l in pred_losses)
+        level_3 = 0
+        level_1 = 0
+
         accu_nor = correct/len(test_dataset)
         print(f'Correct normal predictions: {correct}/{len(test_dataset)}, the accuracy:{accu_nor}')
         threshold_accuracy['normal'].append(accu_nor)
 
-        predictions, pred_losses = predict(model, anomaly_train_df)
+        predictions, pred_losses = predict(model, anomaly_set)
         correct = sum(l > THRESHOLD for l in pred_losses)
-        accu_anormal = correct/len(anomaly_train_df)
-        print(f'Correct anomaly predictions: {correct}/{len(anomaly_train_df)}, the accuracy of anomaly:{accu_anormal}')
+        for l in pred_losses:
+            if l > 58:
+                level_3 += 1
+            else:
+                level_1 += 1
+        print(f"found {level_1} level 1 anomaly points, {level_3} level 3 anomaly points")
+        accu_anormal = correct/len(anomaly_set)
+        print(f'Correct anomaly predictions: {correct}/{len(anomaly_set)}, the accuracy of anomaly:{accu_anormal}')
         threshold_accuracy['anormal'].append(accu_anormal)
 
     print(threshold_accuracy)

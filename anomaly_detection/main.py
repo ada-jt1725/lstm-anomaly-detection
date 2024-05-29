@@ -8,53 +8,22 @@ import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 import copy
+import sys
+import os
+CURRENT_DIR = os.path.split(os.path.abspath(__file__))[0]  # 当前目录
+config_path = CURRENT_DIR.rsplit('/', 1)[0]  # 上三级目录
+sys.path.append(config_path)
 import config
 import model
 from sklearn.preprocessing import MinMaxScaler
 from tqdm import tqdm
+from dataset import MyDataset
 import faulthandler
 # 在import之后直接添加以下启用代码即可
 # faulthandler.enable()
 # 后边正常写你的代码
 
 logging.basicConfig(filename='train.log', level=logging.DEBUG)
-
-
-def make_signal_list():
-    signal_list = list()
-    for col in config.signal_columns:
-        for i in range(-config.slide_range, 1):
-            signal_list.append(col + str(i))
-    return signal_list
-
-def create_dataset(df):
-    array = np.array(df)
-    # print(f"array.shape={array.shape}") # (82736, 400)
-    # 将数组分割为两个部分s
-    array1 = array[:, :config.slide_range+1]  # 选择所有行和前200列
-    array2 = array[:, config.slide_range+1:]  # 选择所有行和后200列
-    # print(f"array1.shape={array1.shape}, array2.shape={array2.shape}") # (82736, 200), (82736, 200)
-    # 将两个部分合并为一个新的数组
-    array_new = np.stack((array1, array2), axis=-1)
-    dataset = [torch.tensor(s).float() for s in array_new]
-    n_seq, seq_len, n_features = torch.stack(dataset).shape
-
-    return dataset, seq_len, n_features
-
-
-class MyDataset(Dataset):
-    def __init__(self, path):
-        self.signal_df = pd.read_csv(path)
-        self.signal_columns = make_signal_list()
-
-    def __len__(self):
-        return len(self.signal_df)
-
-    def __getitem__(self, idx):
-        row = self.signal_df.loc[idx]
-        x = row[self.signal_columns].values.astype(float)
-        return x
-
 
 def train_model(model, train_dataset, val_dataset, n_epochs):
     print("start training")
@@ -117,19 +86,15 @@ def predict(model, dataset):
 if __name__ == "__main__":
     print('loading data...')
     train_dataset = MyDataset(path=config.after_train_dataset_path)
-    train_df, val_df = train_test_split(
-        train_dataset,
-        test_size=0.1
-    )
-    train_dataset, seq_len, n_features = create_dataset(train_df)
-    val_dataset, _, _ = create_dataset(val_df)
+    train_set, seq_len, n_features = train_dataset.create_dataset(train_dataset)
+    val_set, _, _ = train_dataset.create_dataset(train_dataset, "val")
     print('load data complete:')
     print(f"train_dataset_len={len(train_dataset)}, seq_len={seq_len}, n_features={n_features}") # [82736, 200, 2]
     
 
     batch_size = config.batch_size
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, drop_last=True)
-    val_loader = DataLoader(val_dataset, batch_size=batch_size, drop_last=True)
+    train_loader = DataLoader(train_set, batch_size=batch_size, drop_last=True)
+    val_loader = DataLoader(val_set, batch_size=batch_size, drop_last=True)
 
     model = model.RecurrentAutoencoder(seq_len, n_features, 128) 
 

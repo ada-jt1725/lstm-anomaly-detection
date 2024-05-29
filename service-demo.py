@@ -1,13 +1,12 @@
 from flask import Flask, request, jsonify
 import torch
 import numpy as np
-import model
 import config
 import torch.nn as nn
 from collections import deque
 
 # 加载模型
-model = torch.load('/Users/bytedance/Desktop/lstm-master-batch//lstm-anomoly-detection-master/model.pth', map_location=torch.device('cpu'))
+model = torch.load(config.MODEL_PATH, map_location=torch.device('cpu'))
 model.eval()  # 设置为评估模式
 
 app = Flask(__name__)
